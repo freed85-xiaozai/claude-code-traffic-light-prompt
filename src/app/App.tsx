@@ -128,6 +128,8 @@ export default function App() {
     window.electronAPI.setState(light);
   };
 
+  const dark = theme === "dark";
+
   // 统一管理窗口高度，避免主题/状态/设置面板切换时高度错乱
   useEffect(() => {
     const dogVisible = !dark && active === "red";
@@ -140,8 +142,6 @@ export default function App() {
     setMuted(next);
     window.electronAPI.setMute(next);
   };
-
-  const dark = theme === "dark";
 
   const housing = dark
     ? {
