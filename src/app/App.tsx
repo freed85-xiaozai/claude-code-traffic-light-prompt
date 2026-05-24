@@ -130,12 +130,9 @@ export default function App() {
 
   const dark = theme === "dark";
 
-  // 统一管理窗口高度，避免主题/状态/设置面板切换时高度错乱
   useEffect(() => {
-    const dogVisible = !dark && active === "red";
-    const base = dogVisible ? 300 : 220;
-    window.electronAPI.setWindowHeight(showSettings ? base + 90 : base);
-  }, [dark, active, showSettings]);
+    window.electronAPI.setWindowHeight(showSettings ? 310 : 220);
+  }, [showSettings]);
 
   const toggleMute = () => {
     const next = !muted;
