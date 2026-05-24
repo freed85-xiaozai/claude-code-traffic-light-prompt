@@ -3,8 +3,8 @@ const path = require('path')
 const fs = require('fs')
 
 const os = require('os')
-// 统一用 ~/.claude/ 目录，Claude Code 已保证该目录存在
-const TMP          = path.join(os.homedir(), '.claude')
+// macOS/Linux 用 /tmp（向后兼容），Windows 用 ~/.claude/（/tmp 不存在）
+const TMP          = process.platform === 'win32' ? path.join(os.homedir(), '.claude') : '/tmp'
 const STATE_FILE   = path.join(TMP, 'cc_traffic_light_state')
 const PID_FILE     = path.join(TMP, 'cc_traffic_light_electron.pid')
 const THEME_FILE   = path.join(TMP, 'cc_traffic_light_theme')
@@ -38,11 +38,10 @@ function setupClaudeHooks() {
 
   // Windows 用 cmd /c echo，避免 echo 带多余空格；macOS/Linux 用 sh
   const isWin = process.platform === 'win32'
-  const stateFile = STATE_FILE.replace(/\\/g, '\\\\')
   const HOOKS_TO_ADD = {
-    UserPromptSubmit: isWin ? `cmd /c "echo red> \\"${STATE_FILE}\\""` : `echo red > "${STATE_FILE}"`,
-    Stop:             isWin ? `cmd /c "echo green> \\"${STATE_FILE}\\""` : `echo green > "${STATE_FILE}"`,
-    Elicitation:      isWin ? `cmd /c "echo yellow> \\"${STATE_FILE}\\""` : `echo yellow > "${STATE_FILE}"`,
+    UserPromptSubmit: isWin ? `cmd /c "echo red> \\"${STATE_FILE}\\""` : `echo red > ${STATE_FILE}`,
+    Stop:             isWin ? `cmd /c "echo green> \\"${STATE_FILE}\\""` : `echo green > ${STATE_FILE}`,
+    Elicitation:      isWin ? `cmd /c "echo yellow> \\"${STATE_FILE}\\""` : `echo yellow > ${STATE_FILE}`,
   }
 
   let settings = {}
