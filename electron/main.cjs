@@ -117,6 +117,60 @@ function setupClaudeHooks() {
 let lastConfiguredSettingsPath = ''
 let mainWin = null
 
+function needsUpdate(remoteVersion) {
+  try {
+    const current = require('../package.json').version
+    const parse = v => v.split('.').map(Number)
+    const [rMaj, rMin, rPat] = parse(remoteVersion)
+    const [cMaj, cMin, cPat] = parse(current)
+    return rMaj > cMaj || (rMaj === cMaj && rMin > cMin) || (rMaj === cMaj && rMin === cMin && rPat > cPat)
+  } catch { return false }
+}
+
+function handleRemoteConfig({ version, notes, message }) {
+  const { dialog, shell } = require('electron')
+  const showUpdate = () => {
+    if (!version || !needsUpdate(version)) return
+    dialog.showMessageBox({
+      type: 'info',
+      title: '发现新版本',
+      message: `CC 红绿灯 v${version} 已发布`,
+      detail: (notes || '') + '\n\n点击"立即更新"跳转到下载页面。',
+      buttons: ['立即更新', '稍后再说'],
+      defaultId: 0,
+    }).then(({ response }) => {
+      if (response === 0) {
+        shell.openExternal('https://github.com/freed85-xiaozai/Claude-Code-Traffic-Light-Prompt/releases/latest')
+      }
+    })
+  }
+
+  if (message && message.trim()) {
+    dialog.showMessageBox({
+      type: 'info',
+      title: '来自作者的消息',
+      message: message.trim(),
+      buttons: ['知道了'],
+    }).then(showUpdate)
+  } else {
+    showUpdate()
+  }
+}
+
+function checkForUpdates() {
+  const https = require('https')
+  const url = 'https://cdn.jsdelivr.net/gh/freed85-xiaozai/Claude-Code-Traffic-Light-Prompt@main/public/update.json'
+  const req = https.get(url, (res) => {
+    let data = ''
+    res.on('data', chunk => { data += chunk })
+    res.on('end', () => {
+      try { handleRemoteConfig(JSON.parse(data)) } catch {}
+    })
+  })
+  req.on('error', () => {})
+  req.setTimeout(8000, () => req.destroy())
+}
+
 function buildAppMenu(currentTheme) {
   return Menu.buildFromTemplate([
     {
@@ -204,6 +258,10 @@ function buildTrayMenu(currentTheme) {
       }
     },
     { type: 'separator' },
+    {
+      label: '检查更新',
+      click: () => checkForUpdates()
+    },
     {
       label: '关于我',
       click: () => {
@@ -343,6 +401,9 @@ app.whenReady().then(() => {
   tray.setContextMenu(buildTrayMenu(theme))
 
   createWindow()
+
+  // 启动 3 秒后静默检查更新和消息
+  setTimeout(checkForUpdates, 3000)
 })
 
 app.on('will-quit', () => {
