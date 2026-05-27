@@ -127,10 +127,20 @@ function needsUpdate(remoteVersion) {
   } catch { return false }
 }
 
-function handleRemoteConfig({ version, notes, message }) {
+function handleRemoteConfig({ version, notes, message }, manual = false) {
   const { dialog, shell } = require('electron')
   const showUpdate = () => {
-    if (!version || !needsUpdate(version)) return
+    if (!version || !needsUpdate(version)) {
+      if (manual) {
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'CC 红绿灯',
+          message: '当前已是最新版本',
+          buttons: ['好的'],
+        })
+      }
+      return
+    }
     dialog.showMessageBox({
       type: 'info',
       title: '发现新版本',
@@ -157,17 +167,22 @@ function handleRemoteConfig({ version, notes, message }) {
   }
 }
 
-function checkForUpdates() {
+function checkForUpdates(manual = false) {
   const https = require('https')
   const url = 'https://cdn.jsdelivr.net/gh/freed85-xiaozai/Claude-Code-Traffic-Light-Prompt@main/public/update.json'
   const req = https.get(url, (res) => {
     let data = ''
     res.on('data', chunk => { data += chunk })
     res.on('end', () => {
-      try { handleRemoteConfig(JSON.parse(data)) } catch {}
+      try { handleRemoteConfig(JSON.parse(data), manual) } catch {}
     })
   })
-  req.on('error', () => {})
+  req.on('error', () => {
+    if (manual) {
+      const { dialog } = require('electron')
+      dialog.showErrorBox('CC 红绿灯', '检查更新失败，请检查网络连接。')
+    }
+  })
   req.setTimeout(8000, () => req.destroy())
 }
 
@@ -260,7 +275,7 @@ function buildTrayMenu(currentTheme) {
     { type: 'separator' },
     {
       label: '检查更新',
-      click: () => checkForUpdates()
+      click: () => checkForUpdates(true)
     },
     {
       label: '关于我',
