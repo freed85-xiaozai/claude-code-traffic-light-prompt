@@ -15,6 +15,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('theme-change', handler)
     return () => ipcRenderer.removeListener('theme-change', handler)
   },
+  getStyle: () => ipcRenderer.invoke('get-style'),
+  setStyle: (style) => ipcRenderer.send('set-style', style),
+  onStyleChange: (callback) => {
+    const handler = (_, style) => callback(style)
+    ipcRenderer.on('style-change', handler)
+    return () => ipcRenderer.removeListener('style-change', handler)
+  },
   focusApp: () => ipcRenderer.send('focus-app'),
   getMute: () => ipcRenderer.invoke('get-mute'),
   setMute: (muted) => ipcRenderer.send('set-mute', muted),

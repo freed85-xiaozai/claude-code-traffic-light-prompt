@@ -9,6 +9,7 @@ const STATE_FILE   = path.join(TMP, 'cc_traffic_light_state')
 const PID_FILE     = path.join(TMP, 'cc_traffic_light_electron.pid')
 const THEME_FILE   = path.join(TMP, 'cc_traffic_light_theme')
 const MUTE_FILE    = path.join(TMP, 'cc_traffic_light_mute')
+const STYLE_FILE   = path.join(TMP, 'cc_traffic_light_style')
 const distPath     = path.join(__dirname, '../dist/index.html')
 const isDev        = !fs.existsSync(distPath)
 
@@ -25,6 +26,13 @@ function readMute() {
   try {
     return fs.existsSync(MUTE_FILE) && fs.readFileSync(MUTE_FILE, 'utf-8').trim() === 'true'
   } catch { return false }
+}
+
+function readStyle() {
+  try {
+    const s = fs.existsSync(STYLE_FILE) ? fs.readFileSync(STYLE_FILE, 'utf-8').trim() : ''
+    return s === 'single' ? 'single' : 'triple'
+  } catch { return 'triple' }
 }
 
 function getClaudeSettingsPath() {
@@ -227,11 +235,22 @@ function buildAppMenu(currentTheme) {
   ])
 }
 
-function buildTrayMenu(currentTheme) {
+function buildTrayMenu(currentTheme, currentStyle) {
+  const isSingle = currentStyle === 'single'
   return Menu.buildFromTemplate([
     { label: '切换到红灯', click: () => { try { fs.writeFileSync(STATE_FILE, 'red') } catch {} } },
     { label: '切换到黄灯', click: () => { try { fs.writeFileSync(STATE_FILE, 'yellow') } catch {} } },
     { label: '切换到绿灯', click: () => { try { fs.writeFileSync(STATE_FILE, 'green') } catch {} } },
+    { type: 'separator' },
+    {
+      label: isSingle ? '切换到三灯样式' : '切换到单灯样式',
+      click: () => {
+        const next = isSingle ? 'triple' : 'single'
+        try { fs.writeFileSync(STYLE_FILE, next) } catch {}
+        if (mainWin) mainWin.webContents.send('style-change', next)
+        tray.setContextMenu(buildTrayMenu(currentTheme, next))
+      }
+    },
     { type: 'separator' },
     {
       label: '查看配置路径',
@@ -269,7 +288,7 @@ function buildTrayMenu(currentTheme) {
         const next = currentTheme === 'dark' ? 'light' : 'dark'
         try { fs.writeFileSync(THEME_FILE, next) } catch {}
         if (mainWin) mainWin.webContents.send('theme-change', next)
-        tray.setContextMenu(buildTrayMenu(next))
+        tray.setContextMenu(buildTrayMenu(next, currentStyle))
         Menu.setApplicationMenu(buildAppMenu(next))
       }
     },
@@ -387,8 +406,15 @@ function createWindow() {
   ipcMain.on('set-theme', (_, theme) => {
     lastTheme = theme
     try { fs.writeFileSync(THEME_FILE, theme) } catch {}
-    if (tray) tray.setContextMenu(buildTrayMenu(theme))
+    if (tray) tray.setContextMenu(buildTrayMenu(theme, readStyle()))
     Menu.setApplicationMenu(buildAppMenu(theme))
+  })
+
+  ipcMain.handle('get-style', () => readStyle())
+
+  ipcMain.on('set-style', (_, style) => {
+    try { fs.writeFileSync(STYLE_FILE, style) } catch {}
+    if (tray) tray.setContextMenu(buildTrayMenu(readTheme(), style))
   })
 }
 
@@ -406,6 +432,7 @@ app.whenReady().then(() => {
   try { fs.writeFileSync(PID_FILE, process.pid.toString()) } catch {}
 
   const theme = readTheme()
+  const style = readStyle()
 
   // macOS 应用菜单栏
   Menu.setApplicationMenu(buildAppMenu(theme))
@@ -414,7 +441,7 @@ app.whenReady().then(() => {
   const icon = nativeImage.createFromDataURL(`data:image/png;base64,${TRAY_ICON_B64}`)
   tray = new Tray(icon)
   tray.setToolTip('CC 红绿灯')
-  tray.setContextMenu(buildTrayMenu(theme))
+  tray.setContextMenu(buildTrayMenu(theme, style))
 
   createWindow()
 

@@ -2,16 +2,20 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 type Light = "red" | "yellow" | "green";
 type Theme = "dark" | "light";
+type Style = "triple" | "single";
 
 declare global {
   interface Window {
     electronAPI: {
       onStateChange: (cb: (state: string) => void) => () => void;
       onThemeChange: (cb: (theme: string) => void) => () => void;
+      onStyleChange: (cb: (style: string) => void) => () => void;
       setState: (state: string) => void;
       quit: () => void;
       getTheme: () => Promise<string>;
       setTheme: (theme: string) => void;
+      getStyle: () => Promise<string>;
+      setStyle: (style: string) => void;
       focusApp: () => void;
       getMute: () => Promise<boolean>;
       setMute: (muted: boolean) => void;
@@ -31,6 +35,7 @@ const ORDER: Light[] = ["red", "yellow", "green"];
 export default function App() {
   const [active, setActive]           = useState<Light>("yellow");
   const [theme, setThemeState]        = useState<Theme>("dark");
+  const [style, setStyleState]        = useState<Style>("triple");
   const [greenSteady, setGreenSteady] = useState(false);
   const [muted, setMuted]             = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -42,11 +47,20 @@ export default function App() {
       if (t === "light" || t === "dark") setThemeState(t as Theme);
     });
     window.electronAPI.getMute().then((m) => setMuted(m));
+    window.electronAPI.getStyle().then((s) => {
+      if (s === "single" || s === "triple") setStyleState(s as Style);
+    });
   }, []);
 
   useEffect(() => {
     return window.electronAPI.onThemeChange((t) => {
       if (t === "light" || t === "dark") setThemeState(t as Theme);
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.electronAPI.onStyleChange((s) => {
+      if (s === "single" || s === "triple") setStyleState(s as Style);
     });
   }, []);
 
@@ -131,8 +145,10 @@ export default function App() {
   const dark = theme === "dark";
 
   useEffect(() => {
-    window.electronAPI.setWindowHeight(showSettings ? 310 : 220);
-  }, [showSettings]);
+    const base = style === "single" ? 110 : 220;
+    const withSettings = style === "single" ? 200 : 310;
+    window.electronAPI.setWindowHeight(showSettings ? withSettings : base);
+  }, [showSettings, style]);
 
   const toggleMute = () => {
     const next = !muted;
@@ -185,9 +201,70 @@ export default function App() {
       {/* 外壳容器：可拖拽，灯泡单独设为 no-drag */}
       <div
         className="relative flex flex-col items-center"
-        style={{ ...housing, borderRadius: 24, width: 80, padding: "16px 0 20px", WebkitAppRegion: "drag" } as React.CSSProperties}
+        style={{ ...housing, borderRadius: 24, width: 80, padding: style === "single" ? "16px 0 16px" : "16px 0 20px", WebkitAppRegion: "drag" } as React.CSSProperties}
       >
-        <div className="flex flex-col items-center gap-3">
+        {style === "single" ? (
+          /* 单灯模式：一个灯显示当前状态颜色 */
+          <div className="flex flex-col items-center">
+            {(() => {
+              const cfg = LIGHT_CONFIG[active];
+              const isBlinking = active === "yellow" || (active === "green" && !greenSteady);
+              const isBreathing = active === "red";
+              const dim = dark ? cfg.dimDark : cfg.dimLight;
+              return (
+                <div className="relative flex items-center justify-center">
+                  {isBlinking && (
+                    <div
+                      className={`ring-pulse-${active}`}
+                      style={{ position: "absolute", width: 44, height: 44, borderRadius: "50%", pointerEvents: "none" }}
+                    />
+                  )}
+                  {!dark && active === "red" && (
+                    <img src="dog.gif" alt="" style={{ position: "absolute", width: 48, height: 48, objectFit: "contain", mixBlendMode: "screen", pointerEvents: "none", zIndex: 10 }} />
+                  )}
+                  {!dark && active === "green" && (
+                    <img src="dog-green.gif" alt="" style={{ position: "absolute", width: 48, height: 48, objectFit: "contain", mixBlendMode: "multiply", pointerEvents: "none", zIndex: 10 }} />
+                  )}
+                  <div
+                    style={{
+                      width: 44, height: 44, borderRadius: "50%",
+                      background: dim,
+                      boxShadow: dark
+                        ? `inset 0 2px 8px rgba(0,0,0,0.6), 0 0 20px ${cfg.glow}, 0 0 40px ${cfg.glow}`
+                        : `inset 0 2px 8px rgba(0,0,0,0.08), 0 0 10px ${cfg.glow}`,
+                      border: `1px solid ${cfg.active}30`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      cursor: "pointer", transition: "all 0.3s ease",
+                    }}
+                    onClick={() => {
+                      const next: Light = active === "red" ? "yellow" : active === "yellow" ? "green" : "red";
+                      handleManualSelect(next);
+                    }}
+                  >
+                    <div
+                      className={isBreathing ? "light-breathe-red" : isBlinking ? "light-active" : ""}
+                      style={{
+                        width: 34, height: 34, borderRadius: "50%",
+                        background: `radial-gradient(circle at 38% 36%, ${cfg.active}ff 0%, ${cfg.active}dd 40%, ${cfg.active}88 100%)`,
+                        boxShadow: dark
+                          ? `0 0 12px ${cfg.glow}, 0 0 4px ${cfg.innerGlow}, inset 0 1px 2px rgba(255,255,255,0.25)`
+                          : `0 0 6px ${cfg.glow}, inset 0 1px 2px rgba(255,255,255,0.4)`,
+                        transition: "all 0.4s ease",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      {active !== "red" ? (
+                        <div style={{ width: 16, height: 10, borderRadius: "50%", background: "rgba(255,255,255,0.35)", marginTop: 10, filter: "blur(2px)" }} />
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        ) : (
+          /* 三灯模式 */
+          <div className="flex flex-col items-center gap-3">
           {ORDER.map((light) => {
             const cfg = LIGHT_CONFIG[light];
             const isActive = active === light;
@@ -273,6 +350,7 @@ export default function App() {
             );
           })}
         </div>
+        )}
 
         {/* 设置按钮：悬停显示，右下角 */}
         <button
