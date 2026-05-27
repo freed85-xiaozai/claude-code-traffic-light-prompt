@@ -36,12 +36,18 @@ function setupClaudeHooks() {
   const settingsPath = getClaudeSettingsPath()
   const settingsDir  = path.dirname(settingsPath)
 
-  // Windows 用 cmd /c echo，避免 echo 带多余空格；macOS/Linux 用 sh
   const isWin = process.platform === 'win32'
+  // Windows 用 %USERPROFILE% 环境变量，避免硬编码绝对路径导致跨机器失效
   const HOOKS_TO_ADD = {
-    UserPromptSubmit: isWin ? `cmd /c "echo red> \\"${STATE_FILE}\\""` : `echo red > ${STATE_FILE}`,
-    Stop:             isWin ? `cmd /c "echo green> \\"${STATE_FILE}\\""` : `echo green > ${STATE_FILE}`,
-    Elicitation:      isWin ? `cmd /c "echo yellow> \\"${STATE_FILE}\\""` : `echo yellow > ${STATE_FILE}`,
+    UserPromptSubmit: isWin
+      ? `cmd /c "echo red> %USERPROFILE%\\.claude\\cc_traffic_light_state"`
+      : `echo red > ${STATE_FILE}`,
+    Stop: isWin
+      ? `cmd /c "echo green> %USERPROFILE%\\.claude\\cc_traffic_light_state"`
+      : `echo green > ${STATE_FILE}`,
+    Elicitation: isWin
+      ? `cmd /c "echo yellow> %USERPROFILE%\\.claude\\cc_traffic_light_state"`
+      : `echo yellow > ${STATE_FILE}`,
   }
 
   let settings = {}
@@ -55,16 +61,25 @@ function setupClaudeHooks() {
 
   if (!settings.hooks) settings.hooks = {}
 
+  // 清理所有旧的红绿灯 hook（含绝对路径的旧版本），避免残留失效命令
   let changed = false
+  for (const event of Object.keys(HOOKS_TO_ADD)) {
+    if (!Array.isArray(settings.hooks[event])) continue
+    const before = settings.hooks[event].length
+    settings.hooks[event] = settings.hooks[event].filter(h => {
+      if (!Array.isArray(h.hooks)) return true
+      return !h.hooks.some(hh =>
+        typeof hh.command === 'string' && hh.command.includes('cc_traffic_light_state')
+      )
+    })
+    if (settings.hooks[event].length !== before) changed = true
+  }
+
+  // 写入新 hook
   for (const [event, command] of Object.entries(HOOKS_TO_ADD)) {
-    const existing = settings.hooks[event]
-    const alreadySet = Array.isArray(existing) &&
-      existing.some(h => Array.isArray(h.hooks) && h.hooks.some(hh => hh.command === command))
-    if (!alreadySet) {
-      if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = []
-      settings.hooks[event].push({ matcher: '', hooks: [{ type: 'command', command }] })
-      changed = true
-    }
+    if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = []
+    settings.hooks[event].push({ hooks: [{ type: 'command', command }] })
+    changed = true
   }
 
   if (changed) {
@@ -72,7 +87,6 @@ function setupClaudeHooks() {
       fs.mkdirSync(settingsDir, { recursive: true })
       fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8')
     } catch (e) {
-      // 写入失败时弹出提示
       const { dialog } = require('electron')
       dialog.showErrorBox('CC 红绿灯', `自动配置失败，请手动添加 hooks：\n${e.message}\n\n配置文件路径：${settingsPath}`)
     }
