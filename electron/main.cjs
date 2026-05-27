@@ -326,6 +326,30 @@ function buildTrayMenu(currentTheme, currentStyle) {
         })
       }
     },
+    {
+      label: '复制手动配置',
+      click: () => {
+        const { clipboard, dialog } = require('electron')
+        const isWin = process.platform === 'win32'
+        const snippet = isWin
+          ? `"UserPromptSubmit": [{"hooks": [{"type": "command","command": "cmd /c \\"echo red> %USERPROFILE%\\\\.claude\\\\cc_traffic_light_state\\""}]}],\n  "Stop": [{"hooks": [{"type": "command","command": "cmd /c \\"echo green> %USERPROFILE%\\\\.claude\\\\cc_traffic_light_state\\""}]}],\n  "PreToolUse": [{"matcher": "AskUserQuestion","hooks": [{"type": "command","command": "cmd /c \\"echo yellow> %USERPROFILE%\\\\.claude\\\\cc_traffic_light_state\\""}]}]`
+          : `"UserPromptSubmit": [{"hooks": [{"type": "command","command": "echo red > /tmp/cc_traffic_light_state"}]}],\n  "Stop": [{"hooks": [{"type": "command","command": "echo green > /tmp/cc_traffic_light_state"}]}],\n  "PreToolUse": [{"matcher": "AskUserQuestion","hooks": [{"type": "command","command": "echo yellow > /tmp/cc_traffic_light_state"}]}]`
+        clipboard.writeText(snippet)
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'CC 红绿灯',
+          message: '已复制到剪贴板',
+          detail: '请打开 Claude Code 的 settings.json，在 "hooks": { } 内粘贴，保存后重启 Claude Code 即可。\n\n配置文件路径：' + (lastConfiguredSettingsPath || getClaudeSettingsPath()),
+          buttons: ['打开配置文件', '关闭'],
+          defaultId: 1,
+        }).then(({ response }) => {
+          if (response === 0) {
+            const { shell } = require('electron')
+            shell.openPath(lastConfiguredSettingsPath || getClaudeSettingsPath())
+          }
+        })
+      }
+    },
     { type: 'separator' },
     {
       label: currentTheme === 'dark' ? '切换浅色模式' : '切换深色模式',
