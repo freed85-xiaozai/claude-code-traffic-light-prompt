@@ -204,6 +204,20 @@ function buildTrayMenu(currentTheme) {
       }
     },
     { type: 'separator' },
+    {
+      label: '关于我',
+      click: () => {
+        const { dialog } = require('electron')
+        dialog.showMessageBox({
+          type: 'info',
+          title: '关于我',
+          message: '张顽心',
+          detail: '一个纯爱玩的产品经理，不定期更新自己的 vibe coding 产品\n\n抖音：张顽心',
+          buttons: ['关闭'],
+        })
+      }
+    },
+    { type: 'separator' },
     { label: '退出', click: () => app.quit() }
   ])
 }
